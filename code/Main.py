@@ -1,73 +1,63 @@
-import time
-from rpi_ws281x import *
-from table import Table
-from variables import *
-
 if __name__ == '__main__':
+    import time
+    from select_game import SelectedGame
+    import useful_box
+    from useful_box import LED_COUNT as LED_COUNT
+    from useful_box import LED_PIN as LED_PIN
+    from useful_box import LED_FREQ_HZ as LED_FREQ_HZ
+    from useful_box import LED_DMA as LED_DMA
+    from useful_box import LED_INVERT as LED_INVERT
+    from useful_box import LED_BRIGHTNESS as LED_BRIGHTNESS
+    from useful_box import LED_CHANNEL as LED_CHANNEL
+    from useful_box import LED_STRIP as LED_STRIP
 
+    from rpi_ws281x import *
     strip = Adafruit_NeoPixel(LED_COUNT, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL,
                               LED_STRIP)
     strip.begin()
-
-    for i in range(16):
-        for j in range(16):
-            strip.setPixelColor(order[i][j], Color(0, 0, 0, 0))
-    strip.show()
-
-    obj_table = Table()
+    useful_box.clear_leds(strip)
+    selected_game = SelectedGame()
 
     while True:
         strip.setBrightness(0)
-        ClearLeds(strip)
-        obj_table.ColoringTable_Start(strip)
-        Soft_up_brightness(strip)
+        useful_box.clear_leds(strip)
+        useful_box.color_leds_start(strip)
+        useful_box.soft_up_brightness(strip)
+        print(useful_box.ANSI_GREEN + 'Choose GAME please' + useful_box.ANSI_RESET)
         time.sleep(1)
-        print(ansi_green + 'Choose GAME please' + ansi_reset)
+        white_level = 0
+        flag_toggle_white = True
         game_number = -1
-        k = 0  # - counter for soft pulses of LED's light
-        flag = False
-
         while game_number == -1:
-
-            DataProcessing(buf_developer)
-            time.sleep(0.01)
+            vote_checkers, vote_tik_tak_toe, vote_reversi = (0, 0, 0)
             active_cells = 0
-
-            obj_table.ColoringTable_Wait(strip, k)
-
-            if not flag:
-                k += 1
+            useful_box.color_leds_wait(strip, white_level)
+            if flag_toggle_white:
+                white_level += 1
             else:
-                k -= 1
-
-            if k == 0 or k == 50:  # 50 - picked up empirically for soft pulses of LED's light
-                flag = not flag
-
-            vote_Checkers = 0
-            vote_TikTakToe = 0
-            active_cells = 0
-
-            DataProcessing(buf_selectgame)
-            time.sleep(0.01)  # - for prettier LEDs effect
-
+                white_level -= 1
+            if white_level in (0, 100):
+                flag_toggle_white = not flag_toggle_white
+            useful_box.data_processing(useful_box.BUF_SELECT_GAME)
             for i in range(8):
                 for j in range(8):
-                    if Cells[i][j] == 1:
+                    if useful_box.cells[i][j] == 1:
                         active_cells += 1
-                    if DryData[i][j] == 1:
-                        if j < 3:
-                            vote_Checkers += 1
-                        else:
-                            vote_TikTakToe += 1
-
-            print(vote_TikTakToe)
-            if active_cells >= switch_count:
-                game_number = 0  # Developer Mode
+                    if useful_box.dry_data[i][j] == 1:
+                        if i < 3 and j < 3:
+                            vote_checkers += 1
+                        elif i < 3 and j >= 3:
+                            vote_tik_tak_toe += 1
+                        elif i >= 3 and j < 3:
+                            vote_reversi += 1
+            if active_cells >= useful_box.EXIT_COUNT:
+                game_number = 0  # Service Mode
                 break
-            elif vote_Checkers >= 4:
+            elif vote_checkers >= 2:
                 game_number = 1  # Checkers
-            elif vote_TikTakToe >= 4:
-                game_number = 2  # TikTakToe
-
-        obj_table.select_game(game_number)  # Need get from sensors
-        obj_table.start_game(strip)
+            elif vote_tik_tak_toe >= 2:
+                game_number = 2  # Tik Tak Toe
+            elif vote_reversi >= 2:
+                game_number = 3  # Reversi
+        selected_game.choice_the_game(game_number)
+        selected_game.start_the_game(strip)
